@@ -15,11 +15,6 @@ class UserStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.Register = channel.unary_unary(
-                '/ratings.features.user.User/Register',
-                request_serializer=ratings__features__user__pb2.RegisterRequest.SerializeToString,
-                response_deserializer=ratings__features__user__pb2.RegisterResponse.FromString,
-                )
         self.Authenticate = channel.unary_unary(
                 '/ratings.features.user.User/Authenticate',
                 request_serializer=ratings__features__user__pb2.AuthenticateRequest.SerializeToString,
@@ -35,21 +30,20 @@ class UserStub(object):
                 request_serializer=ratings__features__user__pb2.VoteRequest.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
                 )
-        self.ListVotes = channel.unary_unary(
-                '/ratings.features.user.User/ListVotes',
-                request_serializer=ratings__features__user__pb2.ListVotesRequest.SerializeToString,
-                response_deserializer=ratings__features__user__pb2.ListVotesResponse.FromString,
+        self.ListMyVotes = channel.unary_unary(
+                '/ratings.features.user.User/ListMyVotes',
+                request_serializer=ratings__features__user__pb2.ListMyVotesRequest.SerializeToString,
+                response_deserializer=ratings__features__user__pb2.ListMyVotesResponse.FromString,
+                )
+        self.GetSnapVotes = channel.unary_unary(
+                '/ratings.features.user.User/GetSnapVotes',
+                request_serializer=ratings__features__user__pb2.GetSnapVotesRequest.SerializeToString,
+                response_deserializer=ratings__features__user__pb2.GetSnapVotesResponse.FromString,
                 )
 
 
 class UserServicer(object):
     """Missing associated documentation comment in .proto file."""
-
-    def Register(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
 
     def Authenticate(self, request, context):
         """Missing associated documentation comment in .proto file."""
@@ -69,7 +63,13 @@ class UserServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ListVotes(self, request, context):
+    def ListMyVotes(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetSnapVotes(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -78,11 +78,6 @@ class UserServicer(object):
 
 def add_UserServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'Register': grpc.unary_unary_rpc_method_handler(
-                    servicer.Register,
-                    request_deserializer=ratings__features__user__pb2.RegisterRequest.FromString,
-                    response_serializer=ratings__features__user__pb2.RegisterResponse.SerializeToString,
-            ),
             'Authenticate': grpc.unary_unary_rpc_method_handler(
                     servicer.Authenticate,
                     request_deserializer=ratings__features__user__pb2.AuthenticateRequest.FromString,
@@ -98,10 +93,15 @@ def add_UserServicer_to_server(servicer, server):
                     request_deserializer=ratings__features__user__pb2.VoteRequest.FromString,
                     response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
             ),
-            'ListVotes': grpc.unary_unary_rpc_method_handler(
-                    servicer.ListVotes,
-                    request_deserializer=ratings__features__user__pb2.ListVotesRequest.FromString,
-                    response_serializer=ratings__features__user__pb2.ListVotesResponse.SerializeToString,
+            'ListMyVotes': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListMyVotes,
+                    request_deserializer=ratings__features__user__pb2.ListMyVotesRequest.FromString,
+                    response_serializer=ratings__features__user__pb2.ListMyVotesResponse.SerializeToString,
+            ),
+            'GetSnapVotes': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSnapVotes,
+                    request_deserializer=ratings__features__user__pb2.GetSnapVotesRequest.FromString,
+                    response_serializer=ratings__features__user__pb2.GetSnapVotesResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -112,23 +112,6 @@ def add_UserServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class User(object):
     """Missing associated documentation comment in .proto file."""
-
-    @staticmethod
-    def Register(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/ratings.features.user.User/Register',
-            ratings__features__user__pb2.RegisterRequest.SerializeToString,
-            ratings__features__user__pb2.RegisterResponse.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
     def Authenticate(request,
@@ -182,7 +165,7 @@ class User(object):
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def ListVotes(request,
+    def ListMyVotes(request,
             target,
             options=(),
             channel_credentials=None,
@@ -192,8 +175,25 @@ class User(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/ratings.features.user.User/ListVotes',
-            ratings__features__user__pb2.ListVotesRequest.SerializeToString,
-            ratings__features__user__pb2.ListVotesResponse.FromString,
+        return grpc.experimental.unary_unary(request, target, '/ratings.features.user.User/ListMyVotes',
+            ratings__features__user__pb2.ListMyVotesRequest.SerializeToString,
+            ratings__features__user__pb2.ListMyVotesResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def GetSnapVotes(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/ratings.features.user.User/GetSnapVotes',
+            ratings__features__user__pb2.GetSnapVotesRequest.SerializeToString,
+            ratings__features__user__pb2.GetSnapVotesResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
