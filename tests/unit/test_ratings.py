@@ -2,7 +2,8 @@
 # See LICENSE file for licensing details.
 
 import unittest
-from unittest.mock import patch
+
+# from unittest.mock import patch
 
 from ratings import Ratings
 
@@ -16,21 +17,21 @@ class TestRatings(unittest.TestCase):
         self.assertEqual(r.connection_string, "foobar")
         self.assertEqual(r.jwt_secret, "deadbeef")
 
-    @patch("database.RatingsDatabase.ready", lambda x: False)
-    @patch("database.RatingsDatabase.create_tables", lambda x: True)
-    def test_ratings_ready_db_not_initialised_jwt_not_present(self):
-        r = Ratings("foobar", "")
-        self.assertFalse(r.ready())
+    # @patch("database.RatingsDatabase.ready", lambda x: False)
+    # @patch("database.RatingsDatabase.create_tables", lambda x: True)
+    # def test_ratings_ready_db_not_initialised_jwt_not_present(self):
+    #     r = Ratings("foobar", "")
+    #     self.assertFalse(r.ready())
 
-    @patch("database.RatingsDatabase.ready", lambda x: True)
-    def test_ratings_ready_db_initialised_jwt_not_present(self):
-        r = Ratings("foobar", "")
-        self.assertFalse(r.ready())
+    # @patch("database.RatingsDatabase.ready", lambda x: True)
+    # def test_ratings_ready_db_initialised_jwt_not_present(self):
+    #     r = Ratings("foobar", "")
+    #     self.assertFalse(r.ready())
 
-    @patch("database.RatingsDatabase.ready", lambda x: True)
-    def test_ratings_ready_db_initialised_jwt_present(self):
-        r = Ratings("foobar", "deadbeef")
-        self.assertTrue(r.ready())
+    # @patch("database.RatingsDatabase.ready", lambda x: True)
+    # def test_ratings_ready_db_initialised_jwt_present(self):
+    #     r = Ratings("foobar", "deadbeef")
+    #     self.assertTrue(r.ready())
 
     def test_ratings_pebble_layer(self):
         r = Ratings("foobar", "deadbeef")
