@@ -18,10 +18,15 @@ class Ratings:
 
     def ready(self):
         """Report whether Ratings is ready to start."""
-        if not (jwt_secret_present := len(self.jwt_secret) > 0):
-            logger.warning("Ratings service JWT token has zero-length")
+        jwt_secret_present = len(self.jwt_secret) > 0
+        connection_string_present = len(self.connection_string) > 0
 
-        return jwt_secret_present
+        if not jwt_secret_present:
+            logger.warning("Ratings service JWT token has zero-length")
+        if not connection_string_present:
+            logger.warning("Ratings service connection string is empty")
+
+        return jwt_secret_present and connection_string_present
 
     def pebble_layer(self) -> dict:
         """Return a dictionary representing a Pebble layer."""

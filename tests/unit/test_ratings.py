@@ -16,6 +16,18 @@ class TestRatings(unittest.TestCase):
         self.assertEqual(r.connection_string, "foobar")
         self.assertEqual(r.jwt_secret, "deadbeef")
 
+    def test_ratings_ready_connection_string_present_jwt_not_present(self):
+        r = Ratings("foobar", "")
+        self.assertFalse(r.ready())
+
+    def test_ratings_ready_connection_string_not_present_jwt_present(self):
+        r = Ratings("", "foobar")
+        self.assertFalse(r.ready())
+
+    def test_ratings_ready_connection_string_present_jwt(self):
+        r = Ratings("foobar", "deadbeef")
+        self.assertTrue(r.ready())
+
     def test_ratings_pebble_layer(self):
         r = Ratings("foobar", "deadbeef")
         self.assertEqual(

@@ -49,9 +49,6 @@ class RatingsCharm(ops.CharmBase):
         if not self._ratings:
             return
 
-        if not self._ratings.ready():
-            self.unit.status = ops.MaintenanceStatus("Initialising database")
-
         self._start_ratings()
 
     def _start_ratings(self):
