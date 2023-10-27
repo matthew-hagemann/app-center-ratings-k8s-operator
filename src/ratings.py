@@ -38,6 +38,7 @@ class Ratings:
                         "APP_ENV": "dev",
                         "APP_JWT_SECRET": self.jwt_secret,
                         "APP_POSTGRES_URI": self.connection_string,
+                        "APP_MIGRATION_POSTGRES_URI": self.connection_string,
                         "APP_LOG_LEVEL": "info",
                     },
                 }
