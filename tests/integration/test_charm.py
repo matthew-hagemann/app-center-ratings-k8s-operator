@@ -79,15 +79,15 @@ async def test_ratings_scale(ops_test: OpsTest):
 
 
 @mark.abort_on_fail
-async def test_ratings_register_user(ops_test: OpsTest):
+async def test_ratings_authenticate_user(ops_test: OpsTest):
     """End-to-end test to ensure the app can interact with the database."""
     status = await ops_test.model.get_status()  # noqa: F821
     address = status["applications"][RATINGS]["public-address"]
 
     channel = grpc.insecure_channel(f"{address}:18080")
     stub = pb2_grpc.UserStub(channel)
-    message = pb2.RegisterRequest(id=secrets.token_hex(32))
-    response = stub.Register(message)
+    message = pb2.AuthenticateRequest(id=secrets.token_hex(32))
+    response = stub.Authenticate(message)
     assert response.token
 
 
@@ -127,8 +127,8 @@ async def test_ratings_register_user_through_ingress(ops_test: OpsTest):
     address = f"{ops_test.model_name}-{RATINGS}.foo.bar:80"
     channel = grpc.insecure_channel(address)
     stub = pb2_grpc.UserStub(channel)
-    message = pb2.RegisterRequest(id=secrets.token_hex(32))
-    response = stub.Register(message)
+    message = pb2.AuthenticateRequest(id=secrets.token_hex(32))
+    response = stub.Authenticate(message)
     assert response.token
 
 

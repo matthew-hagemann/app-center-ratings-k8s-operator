@@ -13,7 +13,6 @@ import secrets
 import ops
 from charms.data_platform_libs.v0.data_interfaces import DatabaseCreatedEvent, DatabaseRequires
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
-from database import DatabaseConnectionError, DatabaseInitialisationError
 from ratings import Ratings
 
 logger = logging.getLogger(__name__)
@@ -48,14 +47,6 @@ class RatingsCharm(ops.CharmBase):
     def _on_database_created(self, _: DatabaseCreatedEvent):
         """Handle the database creation event."""
         if not self._ratings:
-            return
-
-        try:
-            if not self._ratings.ready():
-                self.unit.status = ops.MaintenanceStatus("Initialising database")
-        except (DatabaseConnectionError, DatabaseInitialisationError) as e:
-            logger.error(str(e))
-            self.unit.status = ops.BlockedStatus("Failed to create database tables")
             return
 
         self._start_ratings()
