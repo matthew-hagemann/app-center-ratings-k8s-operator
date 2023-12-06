@@ -98,7 +98,7 @@ async def test_ingress_traefik_k8s(ops_test):
         ops_test.model.deploy(
             "traefik-k8s",
             application_name=TRAEFIK,
-            channel="edge",
+            channel="stable",
             config={"routing_mode": "subdomain", "external_hostname": "foo.bar"},
             trust=True,
         ),
