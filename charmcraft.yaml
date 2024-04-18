@@ -1,17 +1,59 @@
-# This file configures Charmcraft.
-# See https://juju.is/docs/sdk/charmcraft-config for guidance.
-
+title: Ubuntu App Center Ratings Service
+name: ubuntu-app-ratings
 type: charm
+summary: A ratings service for snapped applications
+description: |
+  This k8s operator charm wraps the app ratings service.
+
+  The app ratings service is the backend for the App Center's snap ratings feature.
+
+assumes:
+  - juju >= 3.1
+
 bases:
   - build-on:
-    - name: ubuntu
-      channel: "22.04"
+      - name: ubuntu
+        channel: "22.04"
     run-on:
-    - name: ubuntu
-      channel: "22.04"
+      - name: ubuntu
+        channel: "22.04"
 
-parts:
-  charm:
-    charm-binary-python-packages:
-      - psycopg[binary]
-      - PyYAML
+config:
+  options:
+    env:
+      description: The charm's environment. One of prod, stg, or local
+      type: string
+    log_level:
+      default: info
+      description: Set the workload's logging verbosity. One of debug or info.
+      type: string
+    jwt_secret:
+      description: Base64 JWT secret
+      type: string
+
+containers:
+  workload:
+    resource: image
+
+resources:
+  image:
+    type: oci-image
+    description: OCI image for the ratings service
+    upstream-source: ghcr.io/tim-hm/app-center-ratings:sha-0f696eb
+
+requires:
+  database:
+    interface: postgresql_client
+    limit: 1
+  log-proxy:
+    interface: loki_push_api
+    limit: 1
+  ingress:
+    interface: traefik_route
+    limit: 1
+
+provides:
+  metrics-endpoint:
+    interface: prometheus_scrape
+  grafana-dashboard:
+    interface: grafana_dashboard
