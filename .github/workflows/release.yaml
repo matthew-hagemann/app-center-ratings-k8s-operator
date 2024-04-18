@@ -1,7 +1,7 @@
-name: Pull Request
+name: Release
 
 on:
-  pull_request:
+  push:
     branches:
       - main
 
@@ -10,7 +10,8 @@ jobs:
     name: Release to latest/candidate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v2
 
       - uses: canonical/charming-actions/release-libraries@2.5.0-rc
         with:
@@ -21,5 +22,4 @@ jobs:
         with:
           credentials: "${{ secrets.CHARMHUB_TOKEN }}"
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          upload-image: "true"
-          channel: "${{ steps.channel.outputs.name }}"
+          channel: "latest/candidate"
