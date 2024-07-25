@@ -1,123 +1,180 @@
 #!/usr/bin/env python3
-# Copyright 2023 Canonical
+# Copyright 2024 Tim Holmes-Mitra <tim.holmes-mitra@canonical.com>
 # See LICENSE file for licensing details.
 
-"""Ubuntu Software Centre ratings service.
-
-A backend service to support application ratings in the new Ubuntu Software Centre.
-"""
-
 import logging
-import secrets
+from typing import TYPE_CHECKING
 
 import ops
-from charms.data_platform_libs.v0.data_interfaces import DatabaseCreatedEvent, DatabaseRequires
-from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
-from ratings import Ratings
+from utils import get_or_fail, stringify
+from workload import WorkloadAgentBuilder, WorkloadAgentBuilderState
+
+if TYPE_CHECKING:  # development import paths for type checking
+    from lib.charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
+    from lib.charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
+    from lib.charms.loki_k8s.v0.loki_push_api import LogProxyConsumer
+    from lib.charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
+    from lib.charms.traefik_route_k8s.v0.traefik_route import TraefikRouteRequirer
+
+else:  # runtime import paths
+    from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires  # noqa: F401, I001
+    from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider  # noqa: F401, I001
+    from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer  # noqa: F401, I001
+    from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider  # noqa: F401, I001
+    from charms.traefik_route_k8s.v0.traefik_route import TraefikRouteRequirer  # noqa: F401, I001
 
 logger = logging.getLogger(__name__)
 
 
-class RatingsCharm(ops.CharmBase):
-    """Main operator class for ratings service."""
-
-    def __init__(self, *args):
+class AppCenterRatings(ops.CharmBase):
+    def __init__(self, *args) -> None:
         super().__init__(*args)
-        self._container = self.unit.get_container("ratings")
-        self._ratings_svc = None
 
-        # Initialise the integration with Ingress providers (Traefik/nginx)
-        self._ingress = IngressPerAppRequirer(
+        builder = WorkloadAgentBuilder()
+        builder.load_config_values(self.config)
+
+        self._builder = builder
+        self._container = self.unit.get_container("workload")
+
+        # Inspired from https://github.com/canonical/grafana-k8s-operator/blob/main/src/charm.py#L177
+        self._ingress = TraefikRouteRequirer(
             self,
-            host=f"{self.app.name}.{self.model.name}.svc.cluster.local",
-            port=18080,
-            scheme=lambda: "h2c",
+            self.model.get_relation(builder.ingress_relation_name),  # type: ignore
+            builder.ingress_relation_name,
         )
 
-        # Initialise the integration with PostgreSQL
-        self._database = DatabaseRequires(self, relation_name="database", database_name="ratings")
+        self._db = DatabaseRequires(
+            self,
+            relation_name=get_or_fail(builder.db_relation_name),
+            database_name=get_or_fail(builder.db_name),
+        )
 
-        self.framework.observe(self.on.ratings_pebble_ready, self._on_ratings_pebble_ready)
-        self.framework.observe(self._database.on.database_created, self._on_database_created)
+        self._configure_observability()
+        self._register_events()
 
-    def _on_ratings_pebble_ready(self, _: ops.PebbleReadyEvent):
-        """Define and start the workload using the Pebble API."""
-        self._start_ratings()
+    def _configure_observability(self) -> None:
+        """Observability is non-blocking."""
+        builder = self._builder
+        port = builder.port
 
-    def _on_database_created(self, _: DatabaseCreatedEvent):
-        """Handle the database creation event."""
-        if not self._ratings:
+        self._prometheus_scraping = MetricsEndpointProvider(
+            self,
+            relation_name=builder.metrics_relation_name,
+            jobs=[{"static_configs": [{"targets": [f"*:{port}"]}]}],
+            refresh_event=self.on.config_changed,
+        )
+
+        self._logging = LogProxyConsumer(
+            self,
+            relation_name=builder.log_relation_name,
+            log_files=[builder.log_file],
+        )
+
+        self._grafana_dashboards = GrafanaDashboardProvider(
+            self, relation_name=builder.grafana_relation_name
+        )
+
+    def _register_events(self) -> None:
+        observe = self.framework.observe
+
+        observe(self.on.config_changed, self._on_config_changed)
+
+        observe(self.on.workload_pebble_ready, self._try_start)
+
+        observe(self._db.on.database_created, self._try_start)
+        observe(self._db.on.endpoints_changed, self._try_start)
+        observe(self.on.database_relation_broken, self._on_db_relation_broken)
+
+        observe(self.on.ingress_relation_joined, self._try_start)
+        observe(self._ingress.on.ready, self._try_start)
+        observe(self.on.leader_elected, self._try_start)
+        observe(self.on.config_changed, self._try_start)
+
+    def _on_config_changed(self, event: ops.ConfigChangedEvent):
+        env = self.config.get("env")
+
+        if not env:
+            self.unit.status = ops.BlockedStatus("Charm's env unset. Must be prod, stg, or local")
             return
 
-        self._start_ratings()
+        logger.info(f"Environment set to: {env}")
+        self._builder.set_env(env)
+        self._try_start(event)
 
-    def _start_ratings(self):
-        """Populate Pebble layer and start the ratings service."""
-        if self.model.get_relation("database") is None:
-            self.unit.status = ops.WaitingStatus("Waiting for database relation")
+    def _try_start(self, event: ops.EventBase) -> None:
+        self.unit.status = ops.WaitingStatus("Trying to start workload")
+
+        if not self._container.can_connect():
+            self.unit.status = ops.WaitingStatus("Cannot connect to container")
             return
 
-        if not (self._ratings and self._ratings.ready()):
-            self.unit.status = ops.WaitingStatus("Ratings not yet initialised")
+        self._try_fetch_db_relation()
+        self._try_configure_ingress(event)
+
+        builder = self._builder
+        builder_state = builder.get_state()
+
+        if not builder_state == WorkloadAgentBuilderState.Ready:
+            self.unit.status = ops.WaitingStatus(builder_state.name)
+            logger.debug(stringify(builder))
             return
 
-        if self._container.can_connect():
-            self._container.add_layer("ratings", self._ratings.pebble_layer(), combine=True)
+        workload_agent = builder.build()
+
+        try:
+            ingress_config = workload_agent.create_ingress_config
+            self._ingress.submit_to_traefik(ingress_config)
+
+            layer = workload_agent.create_pebble_layer
+            self._container.add_layer(workload_agent.name, layer, combine=True)
             self._container.replan()
-            self.unit.open_port(protocol="tcp", port=18080)
-            self.unit.status = ops.ActiveStatus()
-        else:
-            self.unit.status = ops.WaitingStatus("Waiting for ratings container")
+            self.unit.open_port(protocol="tcp", port=workload_agent.port)
 
-    @property
-    def _ratings(self):
-        """Ratings property that is truthy only when pre-conditions are met."""
-        if self._ratings_svc:
-            return self._ratings_svc
+            version = workload_agent.fetch_version()
+            self.unit.set_workload_version(version)
 
-        if self._database.is_resource_created():
-            connection_string = self._db_connection_string()
-            jwt_secret = self._jwt_secret()
-            self._ratings_svc = Ratings(connection_string, jwt_secret)
+            self.unit.status = ops.ActiveStatus("🚀")
 
-        return self._ratings_svc
+        except ops.pebble.ConnectionError as e:
+            logger.error(f"Failed to connect to Pebble: {e}")
+            self.unit.status = ops.BlockedStatus("Could not connect to container")
 
-    def _db_connection_string(self) -> str:
-        """Report database connection string using info from relation databag."""
-        relation = self.model.get_relation("database")
-        if not relation:
-            return ""
+        except Exception as e:
+            logger.error(f"Pebble replan failed: {e}")
+            self.unit.status = ops.BlockedStatus("Failed to configure container")
 
-        data = self._database.fetch_relation_data()[relation.id]
-        username = data.get("username")
-        password = data.get("password")
-        endpoints = data.get("endpoints")
+    def _try_configure_ingress(self, event: ops.EventBase) -> None:
+        if not self.unit.is_leader():
+            return
 
-        return f"postgres://{username}:{password}@{endpoints}/ratings"
+        # When self._ingress._relation is first set in __init__ it too early in
+        # the charm's life. So, when we capture the relation from the event.
+        if (
+            isinstance(event, ops.RelationJoinedEvent)
+            and event.relation.name == self._builder.ingress_relation_name
+        ):
+            self._ingress._relation = event.relation
 
-    def _jwt_secret(self) -> str:
-        """Report the apps JWT secret; create one if it doesn't exist."""
-        # If the peer relation is not ready, just return an empty string
-        relation = self.model.get_relation("ratings-peers")
-        if not relation:
-            return ""
+        self._builder.set_ingress_ready(self._ingress.is_ready())
 
-        # If the secret already exists, grab its content and return it
-        secret_id = relation.data[self.app].get("jwt-secret-id", None)
-        if secret_id:
-            secret = self.model.get_secret(id=secret_id)
-            return secret.peek_content().get("jwt-secret")
+    def _try_fetch_db_relation(self) -> None:
+        relations = self._db.fetch_relation_data()
 
-        if self.unit.is_leader():
-            logger.info("Creating a new JWT secret")
-            content = {"jwt-secret": secrets.token_hex(24)}
-            secret = self.app.add_secret(content)
-            # Store the secret id in the peer relation for other units if required
-            relation.data[self.app]["jwt-secret-id"] = secret.id
-            return content["jwt-secret"]
-        else:
-            return ""
+        for data in relations.values():
+            if not data:
+                continue
+
+            host, port = data["endpoints"].split(":")
+            (
+                self._builder.set_db_host(host)
+                .set_db_port(int(port))
+                .set_db_username(data["username"])
+                .set_db_password(data["password"])
+            )
+
+    def _on_db_relation_broken(self, _: ops.EventBase | None = None) -> None:
+        self.unit.status = ops.WaitingStatus("Db relation broken")
 
 
 if __name__ == "__main__":  # pragma: nocover
-    ops.main(RatingsCharm)
+    ops.main(AppCenterRatings)  # type: ignore

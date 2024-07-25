@@ -8,7 +8,6 @@ show_missing = true
 [tool.pytest.ini_options]
 minversion = "6.0"
 log_cli_level = "INFO"
-pythonpath = [ ".", "src", "lib/ratings_api" ]
 
 # Formatting tools configuration
 [tool.black]
@@ -20,6 +19,10 @@ target-version = ["py38"]
 line-length = 99
 select = ["E", "W", "F", "C", "N", "D", "I001"]
 extend-ignore = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
     "D203",
     "D204",
     "D213",
@@ -33,11 +36,14 @@ extend-ignore = [
     "D413",
 ]
 ignore = ["E501", "D107"]
-extend-exclude = ["__pycache__", "*.egg_info", "*pb2.py", "*pb2_grpc.py"]
-per-file-ignores = {"tests/*" = ["D100","D101","D102","D103","D104"]}
+extend-exclude = ["__pycache__", "*.egg_info"]
+per-file-ignores = { "tests/*" = ["D100", "D101", "D102", "D103", "D104"] }
 
 [tool.ruff.mccabe]
 max-complexity = 10
 
 [tool.codespell]
 skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
+
+[tool.pyright]
+include = ["src/**.py"]
